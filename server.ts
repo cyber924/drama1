@@ -1,7 +1,6 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { getPublishedArticles, getArticleById, getArticleLastMod } from "./src/lib/articlesService";
@@ -18,11 +17,9 @@ import {
 
 dotenv.config();
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
-
-  app.use(express.json());
+let vite: any = null;
+const app = express();
+app.use(express.json());
 
   // Helper function to calculate relative time (e.g. 5시간 전) from RFC 822 pubDate
   function getRelativeTime(pubDateStr: string): string {
@@ -308,15 +305,6 @@ async function startServer() {
     return `${forwardedProto}://${forwardedHost}`;
   }
 
-  // Vite server instance for development
-  let vite: any = null;
-  if (process.env.NODE_ENV !== "production") {
-    vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "custom",
-    });
-  }
-
   async function renderPage(req: express.Request, res: express.Response, articleId?: string) {
     const siteUrl = normalizeSiteUrl(getSiteUrl(req));
 
@@ -484,23 +472,34 @@ ${JSON.stringify(breadcrumbLd, null, 2)}
   });
 
   // Vite middleware for dev asset serving or static dist in production
-  if (process.env.NODE_ENV !== "production" && vite) {
-    app.use(vite.middlewares);
+  async function initDevServer() {
+    if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+      const { createServer } = await import("vite");
+      vite = await createServer({
+        server: { middlewareMode: true },
+        appType: "custom",
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), 'dist');
+      app.use(express.static(distPath, { index: false }));
+    }
+
     app.get('*', async (req, res) => {
       await renderPage(req, res);
     });
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath, { index: false }));
-    app.get('*', async (req, res) => {
-      await renderPage(req, res);
-    });
+
+    if (!process.env.VERCEL) {
+      const PORT = 3000;
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Server running on http://0.0.0.0:${PORT}`);
+      });
+    }
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-  });
-}
+  initDevServer();
+
+  export default app;
 
 // Rich high-fidelity default news feed to return if Gemini isn't configured or fails
 function getFallbackNews() {
@@ -737,4 +736,4 @@ function getDynamicHourlyRankings() {
   });
 }
 
-startServer();
+
