@@ -124,12 +124,33 @@ export function parseContentToBlocks(content: string, title: string): EditorialB
   return blocks;
 }
 
+function convertFirestoreTimestamp(timestamp: any): string {
+  if (!timestamp) return new Date().toISOString();
+  if (typeof timestamp.toDate === 'function') {
+    try {
+      return timestamp.toDate().toISOString();
+    } catch (e) {}
+  }
+  if (typeof timestamp.seconds === 'number') {
+    try {
+      return new Date(timestamp.seconds * 1000).toISOString();
+    } catch (e) {}
+  }
+  try {
+    const d = new Date(timestamp);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+  } catch (e) {}
+  return new Date().toISOString();
+}
+
 // Fetch all posts from the remote custom database and map them to our types
 export async function fetchArticlesFromHub(): Promise<FirebaseArticleDoc[]> {
   try {
     const postsRef = collection(db, "posts");
     const querySnapshot = await getDocs(postsRef);
-    const results: FirebaseArticleDoc[] = [];
+    const results: any[] = [];
 
     querySnapshot.forEach((doc) => {
       const data = doc.data();
@@ -185,8 +206,13 @@ export async function fetchArticlesFromHub(): Promise<FirebaseArticleDoc[]> {
           avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&q=80',
           bio: '콘텐츠 허브에서 실시간 수집 및 교정이 완료된 프리미엄 에디토리얼 글입니다.'
         },
-        publishedAt: data.createdAt || new Date().toISOString(),
-        updatedAt: data.updatedAt || undefined,
+        publishedAt: convertFirestoreTimestamp(data.createdAt),
+        updatedAt: data.updatedAt ? convertFirestoreTimestamp(data.updatedAt) : undefined,
+        // Preserve access control fields for indexable filtering
+        status: data.status || 'published',
+        isPublished: data.isPublished !== undefined ? data.isPublished : true,
+        deleted: data.deleted !== undefined ? data.deleted : false,
+        isDeleted: data.isDeleted !== undefined ? data.isDeleted : false,
         readTimeMinutes: Math.max(1, Math.ceil(content.length / 650)),
         views: Number(data.views) || 412,
         likes: Number(data.likes) || 98,
@@ -221,6 +247,7 @@ export async function fetchArticlesFromHub(): Promise<FirebaseArticleDoc[]> {
     return results;
   } catch (error) {
     console.error('[Firebase] Error fetching articles from Hub:', error);
-    return [];
+    // Let the error propagate so we can distinguish database failure from "no articles found"
+    throw error;
   }
 }

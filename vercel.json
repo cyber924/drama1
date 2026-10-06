@@ -23,8 +23,16 @@
       "destination": "/api/index"
     },
     {
-      "source": "/(.*)",
-      "destination": "/"
+      "source": "/",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/blog",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/((?!assets/|favicon.ico|.*\\..*).*)",
+      "destination": "/api/index"
     }
   ]
 }

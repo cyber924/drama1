@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import { fileURLToPath } from "url";
 import { getPublishedArticles, getArticleById, getArticleLastMod } from "./src/lib/articlesService";
 import { 
   escapeHtml, 
@@ -16,6 +17,9 @@ import {
 } from "./src/lib/seoHelper";
 
 dotenv.config();
+
+const __filenameSafe = typeof __filename !== "undefined" ? __filename : fileURLToPath(import.meta.url);
+const __dirnameSafe = typeof __dirname !== "undefined" ? __dirname : path.dirname(__filenameSafe);
 
 let vite: any = null;
 const app = express();
@@ -297,6 +301,9 @@ app.use(express.json());
   });
 
   function getSiteUrl(req: express.Request): string {
+    if (process.env.VERCEL_URL) {
+      return `https://${process.env.VERCEL_URL}`;
+    }
     const forwardedProto = (req.headers['x-forwarded-proto'] as string) || 'https';
     const forwardedHost = (req.headers['x-forwarded-host'] as string) || req.get('host') || '';
     if (!forwardedHost || forwardedHost.includes('localhost') || forwardedHost.includes('127.0.0.1')) {
@@ -308,8 +315,8 @@ app.use(express.json());
   function getDistHtmlTemplate(): string {
     const candidates = [
       path.join(process.cwd(), 'dist', 'index.html'),
-      path.join(__dirname, 'dist', 'index.html'),
-      path.join(__dirname, '..', 'dist', 'index.html'),
+      path.join(__dirnameSafe, 'dist', 'index.html'),
+      path.join(__dirnameSafe, '..', 'dist', 'index.html'),
       path.resolve('dist/index.html')
     ];
 
@@ -325,6 +332,125 @@ app.use(express.json());
     }
 
     throw new Error(`[Template Engine] Critical Error: dist/index.html not found in any candidates!`);
+  }
+
+  function renderSemanticSsrBody(article: any): string {
+    let blocksHtml = "";
+    if (article.contentBlocks && Array.isArray(article.contentBlocks)) {
+      for (const block of article.contentBlocks) {
+        switch (block.type) {
+          case "paragraph":
+            blocksHtml += `<p style="margin-bottom: 20px; font-size: 16px; line-height: 1.8; color: #334155;">${escapeHtml(block.content || "")}</p>\n`;
+            break;
+          case "heading":
+            const level = block.headingLevel || 2;
+            const hSize = level === 2 ? "28px" : "22px";
+            blocksHtml += `<h${level} style="font-size: ${hSize}; font-weight: 700; color: #0f172a; margin-top: 32px; margin-bottom: 16px;">${escapeHtml(block.content || "")}</h${level}>\n`;
+            break;
+          case "pullQuote":
+            blocksHtml += `<blockquote style="border-left: 4px solid #3b82f6; padding-left: 20px; font-style: italic; color: #475569; margin: 28px 0; font-size: 18px;">
+              <p style="margin-bottom: 8px;">"${escapeHtml(block.content || "")}"</p>
+              ${block.quoteAuthor ? `<cite style="display: block; font-size: 14px; font-weight: 600; color: #64748b; font-style: normal;">— ${escapeHtml(block.quoteAuthor)}${block.quoteSource ? `, ${escapeHtml(block.quoteSource)}` : ""}</cite>` : ""}
+            </blockquote>\n`;
+            break;
+          case "image":
+            blocksHtml += `<figure style="margin: 32px 0; text-align: center;">
+              <img src="${escapeHtml(block.imageUrl || "")}" alt="${escapeHtml(block.caption || "")}" style="max-width: 100%; height: auto; border-radius: 8px;" />
+              ${block.caption ? `<figcaption style="font-size: 13px; color: #64748b; margin-top: 8px;">${escapeHtml(block.caption)}</figcaption>` : ""}
+            </figure>\n`;
+            break;
+          case "dualImage":
+            blocksHtml += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 32px 0;">
+              ${block.leftImage ? `<figure style="text-align: center; margin: 0;"><img src="${escapeHtml(block.leftImage.url)}" alt="${escapeHtml(block.leftImage.caption)}" style="width: 100%; height: auto; border-radius: 8px;" /><figcaption style="font-size: 12px; color: #64748b; margin-top: 6px;">${escapeHtml(block.leftImage.caption)}</figcaption></figure>` : ""}
+              ${block.rightImage ? `<figure style="text-align: center; margin: 0;"><img src="${escapeHtml(block.rightImage.url)}" alt="${escapeHtml(block.rightImage.caption)}" style="width: 100%; height: auto; border-radius: 8px;" /><figcaption style="font-size: 12px; color: #64748b; margin-top: 6px;">${escapeHtml(block.rightImage.caption)}</figcaption></figure>` : ""}
+            </div>\n`;
+            break;
+          case "callout":
+            blocksHtml += `<div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; border-radius: 4px; padding: 20px; margin: 28px 0;">
+              ${block.calloutTitle ? `<h4 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 700; color: #15803d;">${escapeHtml(block.calloutTitle)}</h4>` : ""}
+              <p style="margin: 0; font-size: 15px; color: #166534;">${escapeHtml(block.content || "")}</p>
+            </div>\n`;
+            break;
+          case "sceneBreakdown":
+            const lines = block.scriptLines?.map((l: any) => `<li style="margin-bottom: 8px;"><strong>${escapeHtml(l.speaker)}</strong>: ${escapeHtml(l.text)} ${l.note ? `<em style="color: #64748b; font-size: 13px;">(${escapeHtml(l.note)})</em>` : ""}</li>`).join("") || "";
+            blocksHtml += `<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 28px 0;">
+              ${block.sceneEpisode ? `<span style="font-size: 12px; color: #3b82f6; font-weight: 600; text-transform: uppercase;">${escapeHtml(block.sceneEpisode)}</span>` : ""}
+              ${block.sceneTitle ? `<h3 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 6px 0 16px 0;">${escapeHtml(block.sceneTitle)}</h3>` : ""}
+              <ul style="list-style: none; padding-left: 0; margin: 0;">${lines}</ul>
+            </div>\n`;
+            break;
+          case "characterMatrix":
+            const rows = block.characters?.map((c: any) => `<tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 12px; font-weight: 700; color: #0f172a;">${escapeHtml(c.name)}</td><td style="padding: 12px; color: #334155;">${escapeHtml(c.actor)}</td><td style="padding: 12px; color: #334155;">${escapeHtml(c.trait)}</td><td style="padding: 12px; color: #334155;">${escapeHtml(c.conflict)}</td></tr>`).join("") || "";
+            blocksHtml += `<div style="overflow-x: auto; margin: 32px 0;">
+              <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+                <thead><tr style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;"><th style="padding: 12px;">인물명</th><th style="padding: 12px;">배우</th><th style="padding: 12px;">특징</th><th style="padding: 12px;">갈등 관계</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>\n`;
+            break;
+          case "editorVerdict":
+            const points = block.verdictPoints?.map((p: any) => `<li style="margin-bottom: 6px;">${escapeHtml(p)}</li>`).join("") || "";
+            blocksHtml += `<div style="background-color: #faf5ff; border: 1px solid #f3e8ff; border-radius: 8px; padding: 20px; margin: 32px 0;">
+              <div style="font-size: 16px; font-weight: 700; color: #7e22ce; margin-bottom: 12px;">Verdict Score: <strong style="font-size: 22px;">${block.verdictScore || 10} / 10</strong></div>
+              ${block.verdictHighlight ? `<p style="font-weight: 600; color: #581c87; margin: 0 0 16px 0;">${escapeHtml(block.verdictHighlight)}</p>` : ""}
+              <ul style="padding-left: 20px; margin: 0; color: #6b21a8; font-size: 14px;">${points}</ul>
+            </div>\n`;
+            break;
+          default:
+            if (block.content) {
+              blocksHtml += `<p style="margin-bottom: 20px; font-size: 16px; line-height: 1.8; color: #334155;">${escapeHtml(block.content)}</p>\n`;
+            }
+        }
+      }
+    }
+
+    const tagsHtml = article.tags?.map((t: string) => `<span style="display: inline-block; background-color: #f1f5f9; color: #475569; padding: 4px 10px; border-radius: 9999px; font-size: 13px; margin-right: 8px; margin-bottom: 8px;">#${escapeHtml(t)}</span>`).join("") || "";
+    const authorName = article.author?.name || '에디토리얼 편집국';
+    const authorRole = article.author?.role || '수석 칼럼니스트';
+    const authorBio = article.author?.bio || '';
+
+    return `
+      <article style="max-width: 800px; margin: 40px auto; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.8; color: #334155; background-color: #ffffff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <header style="margin-bottom: 32px; border-bottom: 1px solid #f1f5f9; padding-bottom: 24px;">
+          <div style="font-size: 12px; color: #2563eb; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">${escapeHtml(article.categoryNameKo || article.category)} · ${escapeHtml(article.subCategory || '')}</div>
+          <h1 style="font-size: 32px; font-weight: 800; line-height: 1.25; margin: 0 0 12px 0; color: #0f172a; letter-spacing: -0.02em;">${escapeHtml(article.title)}</h1>
+          <p style="font-size: 18px; color: #475569; margin: 0 0 20px 0; font-weight: 400; line-height: 1.4;">${escapeHtml(article.subtitle || '')}</p>
+          
+          <div style="display: flex; align-items: center; gap: 12px; margin-top: 24px;">
+            ${article.author?.avatar ? `<img src="${escapeHtml(article.author.avatar)}" alt="${escapeHtml(authorName)}" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover;" />` : ""}
+            <div>
+              <div style="font-weight: 700; color: #0f172a; font-size: 15px;">${escapeHtml(authorName)} <span style="font-weight: 400; font-size: 13px; color: #64748b; margin-left: 4px;">${escapeHtml(authorRole)}</span></div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 2px;">작성일: ${escapeHtml(article.publishedAt)} · 읽는 시간: ${article.readTimeMinutes}분 · 조회수: ${article.views} · 추천수: ${article.likes}</div>
+            </div>
+          </div>
+        </header>
+
+        ${article.coverImage?.url ? `
+        <div style="margin: 32px 0; text-align: center;">
+          <img src="${escapeHtml(article.coverImage.url)}" alt="${escapeHtml(article.coverImage.alt || article.title)}" style="max-width: 100%; height: auto; border-radius: 8px;" />
+          ${article.coverImage.creditName ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">출처: <a href="${escapeHtml(article.coverImage.creditUrl)}" style="color: #64748b; text-decoration: underline;">${escapeHtml(article.coverImage.creditName)}</a></div>` : ""}
+        </div>
+        ` : ""}
+
+        <section style="font-size: 16px; color: #334155; margin-bottom: 40px;">
+          ${blocksHtml}
+        </section>
+
+        <footer style="margin-top: 48px; border-top: 1px solid #f1f5f9; padding-top: 24px;">
+          <div style="margin-bottom: 24px; display: flex; flex-wrap: wrap;">${tagsHtml}</div>
+          <div style="background-color: #f8fafc; border: 1px solid #f1f5f9; border-radius: 8px; padding: 16px; display: flex; gap: 16px; align-items: flex-start; margin-bottom: 32px;">
+            ${article.author?.avatar ? `<img src="${escapeHtml(article.author.avatar)}" alt="${escapeHtml(authorName)}" style="width: 52px; height: 52px; border-radius: 50%; object-fit: cover;" />` : ""}
+            <div>
+              <h4 style="margin: 0 0 6px 0; font-size: 15px; font-weight: 700; color: #0f172a;">작성자: ${escapeHtml(authorName)} <span style="font-weight: 400; font-size: 13px; color: #64748b;">(${escapeHtml(authorRole)})</span></h4>
+              <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.5;">${escapeHtml(authorBio)}</p>
+            </div>
+          </div>
+          <div style="text-align: center;">
+            <a href="/" style="display: inline-block; padding: 10px 20px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 13px;">전체 기사 목록 보기</a>
+          </div>
+        </footer>
+      </article>
+    `;
   }
 
   async function renderPage(req: express.Request, res: express.Response, articleId?: string) {
@@ -417,15 +543,8 @@ ${JSON.stringify(breadcrumbLd, null, 2)}
 `;
       template = template.replace('</head>', `${articleMetaTags}\n</head>`);
 
-      // 6. Pre-rendered single H1 & content snapshot inside #root for search engine bots
-      const semanticSsrBody = `
-      <div id="ssr-crawling-snapshot" class="sr-only" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;">
-        <h1>${escapeHtml(article.title)}</h1>
-        <p>${escapeHtml(article.subtitle || '')}</p>
-        <p>${escapeHtml(description)}</p>
-        <div>${escapeHtml(article.excerpt || '')}</div>
-      </div>
-      `;
+      // 6. Pre-rendered visible article structure inside #root for search engine bots
+      const semanticSsrBody = renderSemanticSsrBody(article);
       template = template.replace('<div id="root"></div>', `<div id="root">${semanticSsrBody}</div>`);
 
       res.status(200).set('Content-Type', 'text/html; charset=utf-8');
@@ -463,7 +582,7 @@ ${JSON.stringify(breadcrumbLd, null, 2)}
   app.get('/sitemap.xml', async (req, res) => {
     try {
       const siteUrl = normalizeSiteUrl(getSiteUrl(req));
-      const articles = await getPublishedArticles();
+      const articles = await getPublishedArticles(false, false);
       const xml = generateSitemapXml(siteUrl, articles);
       res.type('application/xml; charset=utf-8');
       res.status(200).send(xml);

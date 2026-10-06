@@ -8,12 +8,12 @@ import { FirebaseArticleDoc } from '../types';
 import { MOCK_ARTICLES } from '../data/mockArticles';
 import { fetchArticlesFromHub } from './firebase';
 
-interface CacheEntry {
+interface LiveCacheEntry {
   timestamp: number;
   articles: FirebaseArticleDoc[];
 }
 
-let articlesCache: CacheEntry | null = null;
+let liveArticlesCache: LiveCacheEntry | null = null;
 const CACHE_TTL_MS = 20 * 1000; // 20 seconds cache for high responsiveness and Firestore safety
 
 /**
@@ -68,55 +68,58 @@ export function isArticlePubliclyIndexable(article: any): boolean {
 }
 
 /**
- * Retrieves all published articles with caching.
+ * Retrieves published articles with separate live cache.
+ * Supports filtering out mock articles for operating sitemaps (includeMocks = false).
  */
-export async function getPublishedArticles(forceRefresh = false): Promise<FirebaseArticleDoc[]> {
+export async function getPublishedArticles(forceRefresh = false, includeMocks = true): Promise<FirebaseArticleDoc[]> {
   const now = Date.now();
-  if (!forceRefresh && articlesCache && (now - articlesCache.timestamp < CACHE_TTL_MS)) {
-    return articlesCache.articles;
+  let liveArticles: FirebaseArticleDoc[] = [];
+
+  if (!forceRefresh && liveArticlesCache && (now - liveArticlesCache.timestamp < CACHE_TTL_MS)) {
+    liveArticles = liveArticlesCache.articles;
+  } else {
+    try {
+      liveArticles = await fetchArticlesFromHub();
+      liveArticlesCache = {
+        timestamp: now,
+        articles: liveArticles
+      };
+    } catch (err) {
+      console.error('[articlesService] Failed to load live articles from Hub:', err);
+      // Propagate the error so that the server/caller knows it's a DB failure (500 status), not just 0 articles
+      throw err;
+    }
   }
 
-  try {
-    const liveArticles = await fetchArticlesFromHub();
-    
-    // Combine live Firestore articles with mock articles (de-duplicating by ID)
-    const seenIds = new Set<string>();
-    const combined: FirebaseArticleDoc[] = [];
+  const seenIds = new Set<string>();
+  const combined: FirebaseArticleDoc[] = [];
 
-    // First add live Firestore articles
-    for (const post of liveArticles) {
-      if (post && post.id && !seenIds.has(post.id) && isArticlePubliclyIndexable(post)) {
-        seenIds.add(post.id);
-        combined.push(post);
-      }
+  // First add live Firestore articles
+  for (const post of liveArticles) {
+    if (post && post.id && !seenIds.has(post.id) && isArticlePubliclyIndexable(post)) {
+      seenIds.add(post.id);
+      combined.push(post);
     }
+  }
 
-    // Then add mock articles if not already present
+  // Then add mock articles if requested
+  if (includeMocks) {
     for (const post of MOCK_ARTICLES) {
       if (post && post.id && !seenIds.has(post.id) && isArticlePubliclyIndexable(post)) {
         seenIds.add(post.id);
         combined.push(post);
       }
     }
-
-    // Sort by publishedAt descending
-    combined.sort((a, b) => {
-      const timeA = new Date(a.publishedAt).getTime() || 0;
-      const timeB = new Date(b.publishedAt).getTime() || 0;
-      return timeB - timeA;
-    });
-
-    articlesCache = {
-      timestamp: now,
-      articles: combined
-    };
-
-    return combined;
-  } catch (err) {
-    console.error('[articlesService] Failed to load articles, using fallback mock articles:', err);
-    const fallbacks = MOCK_ARTICLES.filter(isArticlePubliclyIndexable);
-    return fallbacks;
   }
+
+  // Sort by publishedAt descending
+  combined.sort((a, b) => {
+    const timeA = new Date(a.publishedAt).getTime() || 0;
+    const timeB = new Date(b.publishedAt).getTime() || 0;
+    return timeB - timeA;
+  });
+
+  return combined;
 }
 
 /**
