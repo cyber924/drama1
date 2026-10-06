@@ -1,0 +1,6 @@
+{
+  "name": "에디토리얼 웹진 블로그",
+  "description": "드라마 및 문화 콘텐츠 중심의 고품격 공개형 자사 에디토리얼 웹진 블로그 서비스 (구글·네이버 SEO 최적화 및 Firebase DB 연동 구조)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
