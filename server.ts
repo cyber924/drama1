@@ -305,6 +305,28 @@ app.use(express.json());
     return `${forwardedProto}://${forwardedHost}`;
   }
 
+  function getDistHtmlTemplate(): string {
+    const candidates = [
+      path.join(process.cwd(), 'dist', 'index.html'),
+      path.join(__dirname, 'dist', 'index.html'),
+      path.join(__dirname, '..', 'dist', 'index.html'),
+      path.resolve('dist/index.html')
+    ];
+
+    for (const p of candidates) {
+      try {
+        if (fs.existsSync(p)) {
+          console.log(`[Template Engine] Found index.html at path: ${p}`);
+          return fs.readFileSync(p, 'utf-8');
+        }
+      } catch (e) {
+        console.warn(`[Template Engine] Failed reading from candidate path: ${p}`, e);
+      }
+    }
+
+    throw new Error(`[Template Engine] Critical Error: dist/index.html not found in any candidates!`);
+  }
+
   async function renderPage(req: express.Request, res: express.Response, articleId?: string) {
     const siteUrl = normalizeSiteUrl(getSiteUrl(req));
 
@@ -334,8 +356,7 @@ app.use(express.json());
         const rawHtml = fs.readFileSync(path.resolve('index.html'), 'utf-8');
         template = await vite.transformIndexHtml(req.originalUrl, rawHtml);
       } else {
-        const distHtmlPath = path.join(process.cwd(), 'dist', 'index.html');
-        template = fs.readFileSync(distHtmlPath, 'utf-8');
+        template = getDistHtmlTemplate();
       }
 
       // 1. Replace title
@@ -417,8 +438,7 @@ ${JSON.stringify(breadcrumbLd, null, 2)}
       const rawHtml = fs.readFileSync(path.resolve('index.html'), 'utf-8');
       template = await vite.transformIndexHtml(req.originalUrl, rawHtml);
     } else {
-      const distHtmlPath = path.join(process.cwd(), 'dist', 'index.html');
-      template = fs.readFileSync(distHtmlPath, 'utf-8');
+      template = getDistHtmlTemplate();
     }
 
     const homeCanonical = `<link rel="canonical" href="${siteUrl}/" />`;

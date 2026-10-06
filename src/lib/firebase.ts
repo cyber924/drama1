@@ -18,9 +18,11 @@ let db: Firestore;
 
 try {
   const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-  // Initialize with the custom multi-database ID
-  db = initializeFirestore(app, {}, databaseId);
-  console.log('[Firebase] Successfully connected to Custom Database:', databaseId);
+  // Initialize with the custom multi-database ID and enable Long Polling for robust serverless operation!
+  db = initializeFirestore(app, {
+    experimentalForceLongPolling: true
+  }, databaseId);
+  console.log('[Firebase] Successfully connected to Custom Database with Long Polling:', databaseId);
 } catch (error) {
   console.error('[Firebase] Initialization error:', error);
 }
