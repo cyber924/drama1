@@ -314,16 +314,16 @@ app.use(express.json());
 
   function getDistHtmlTemplate(): string {
     const candidates = [
-      path.join(process.cwd(), 'dist', 'index.html'),
-      path.join(__dirnameSafe, 'dist', 'index.html'),
-      path.join(__dirnameSafe, '..', 'dist', 'index.html'),
-      path.resolve('dist/index.html')
+      path.join(process.cwd(), 'dist', 'index_template.html'),
+      path.join(__dirnameSafe, 'dist', 'index_template.html'),
+      path.join(__dirnameSafe, '..', 'dist', 'index_template.html'),
+      path.resolve('dist/index_template.html')
     ];
 
     for (const p of candidates) {
       try {
         if (fs.existsSync(p)) {
-          console.log(`[Template Engine] Found index.html at path: ${p}`);
+          console.log(`[Template Engine] Found index_template.html at path: ${p}`);
           return fs.readFileSync(p, 'utf-8');
         }
       } catch (e) {
@@ -331,7 +331,7 @@ app.use(express.json());
       }
     }
 
-    throw new Error(`[Template Engine] Critical Error: dist/index.html not found in any candidates!`);
+    throw new Error(`[Template Engine] Critical Error: dist/index_template.html not found in any candidates!`);
   }
 
   function renderSemanticSsrBody(article: any): string {
@@ -453,6 +453,35 @@ app.use(express.json());
     `;
   }
 
+  function renderSemanticSsrList(articles: any[]): string {
+    const itemsHtml = articles.map(art => {
+      const authorName = art.author?.name || '에디토리얼 편집국';
+      const authorRole = art.author?.role || '수석 칼럼니스트';
+      return `
+        <article style="margin-bottom: 32px; border-bottom: 1px solid #f1f5f9; padding-bottom: 24px;">
+          <span style="font-size: 11px; color: #2563eb; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">${escapeHtml(art.categoryNameKo || art.category)} · ${escapeHtml(art.subCategory || '')}</span>
+          <h2 style="font-size: 22px; font-weight: 700; margin: 6px 0 8px 0; line-height: 1.3;">
+            <a href="/blog/${art.id}" style="color: #0f172a; text-decoration: none; border-bottom: 1px solid transparent;" onmouseover="this.style.borderBottom='1px solid #0f172a'" onmouseout="this.style.borderBottom='1px solid transparent'">${escapeHtml(art.title)}</a>
+          </h2>
+          <p style="font-size: 15px; color: #475569; margin: 0 0 12px 0; line-height: 1.5;">${escapeHtml(art.excerpt || '')}</p>
+          <div style="font-size: 12px; color: #64748b;">작성자: <strong>${escapeHtml(authorName)}</strong> (${escapeHtml(authorRole)}) · 작성일: ${escapeHtml(art.publishedAt)} · 읽는 시간: ${art.readTimeMinutes}분</div>
+        </article>
+      `;
+    }).join("\n");
+
+    return `
+      <div style="max-width: 800px; margin: 40px auto; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #334155;">
+        <header style="margin-bottom: 40px; border-bottom: 2px solid #0f172a; padding-bottom: 16px;">
+          <h1 style="font-size: 36px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.02em;">에디토리얼 웹진 블로그</h1>
+          <p style="font-size: 16px; color: #475569; margin: 6px 0 0 0;">드라마 심층 비평, 연예 분석 및 시나리오 인문학 연구소</p>
+        </header>
+        <section style="display: flex; flex-direction: column;">
+          ${itemsHtml}
+        </section>
+      </div>
+    `;
+  }
+
   async function renderPage(req: express.Request, res: express.Response, articleId?: string) {
     const siteUrl = normalizeSiteUrl(getSiteUrl(req));
 
@@ -565,6 +594,15 @@ ${JSON.stringify(breadcrumbLd, null, 2)}
       template = template.replace(/<link rel="canonical"[^>]*>/i, homeCanonical);
     } else {
       template = template.replace('</head>', `  ${homeCanonical}\n</head>`);
+    }
+
+    // Pre-rendered list snapshot inside #root for search engine crawler bots
+    try {
+      const articles = await getPublishedArticles();
+      const listSsrBody = renderSemanticSsrList(articles);
+      template = template.replace('<div id="root"></div>', `<div id="root">${listSsrBody}</div>`);
+    } catch (e) {
+      console.error('[SEO Homepage List Render Failed]', e);
     }
 
     res.status(200).set('Content-Type', 'text/html; charset=utf-8');
