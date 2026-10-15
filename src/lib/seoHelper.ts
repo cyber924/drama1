@@ -1,3 +1,4 @@
+import {PRIMARY_SITE_URL} from './site';
 /**
  * @file seoHelper.ts
  * Generates SEO meta tags, OpenGraph, Schema.org JSON-LD (BlogPosting & BreadcrumbList),
@@ -26,7 +27,7 @@ export function escapeHtml(str: string): string {
  * Normalizes Site URL (no trailing slash, HTTPS enforcement).
  */
 export function normalizeSiteUrl(rawUrl: string): string {
-  if (!rawUrl) return 'https://ais-dev-dcrcuobfizspf2mhbgcnva-436251446387.asia-northeast1.run.app';
+  if (!rawUrl) return PRIMARY_SITE_URL;
   let url = rawUrl.trim();
   if (url.endsWith('/')) {
     url = url.slice(0, -1);
@@ -43,7 +44,7 @@ export function normalizeSiteUrl(rawUrl: string): string {
  * Builds BlogPosting Schema.org JSON-LD
  */
 export function buildBlogPostingJsonLd(siteUrl: string, article: FirebaseArticleDoc, siteName = DEFAULT_SITE_NAME) {
-  const postUrl = `${siteUrl}/blog/${article.id}`;
+  const postUrl = `${siteUrl}/blog/${encodeURIComponent(article.id)}`;
   const pubDateIso = new Date(article.publishedAt).toISOString();
   const modDateIso = getArticleLastMod(article);
   const imageUrl = article.coverImage?.url || 'https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=1200&q=80';
@@ -93,7 +94,7 @@ export function buildBlogPostingJsonLd(siteUrl: string, article: FirebaseArticle
  * Builds BreadcrumbList Schema.org JSON-LD (Advanced Enhancement)
  */
 export function buildBreadcrumbJsonLd(siteUrl: string, article: FirebaseArticleDoc) {
-  const postUrl = `${siteUrl}/blog/${article.id}`;
+  const postUrl = `${siteUrl}/blog/${encodeURIComponent(article.id)}`;
   const categoryName = article.categoryNameKo || '드라마';
 
   return {
@@ -110,7 +111,7 @@ export function buildBreadcrumbJsonLd(siteUrl: string, article: FirebaseArticleD
         "@type": "ListItem",
         "position": 2,
         "name": categoryName,
-        "item": `${siteUrl}/blog`
+        "item": `${siteUrl}/`
       },
       {
         "@type": "ListItem",
@@ -135,10 +136,10 @@ export function generateSitemapXml(siteUrl: string, articles: FirebaseArticleDoc
   }
 
   const urlsXml = articles.map(art => {
-    const postUrl = `${normSiteUrl}/blog/${art.id}`;
+    const postUrl = `${normSiteUrl}/blog/${encodeURIComponent(art.id)}`;
     const lastMod = getArticleLastMod(art);
     return `  <url>
-    <loc>${postUrl}</loc>
+    <loc>${escapeHtml(postUrl)}</loc>
     <lastmod>${lastMod}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -148,7 +149,7 @@ export function generateSitemapXml(siteUrl: string, articles: FirebaseArticleDoc
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>${normSiteUrl}/</loc>
+    <loc>${escapeHtml(normSiteUrl)}/</loc>
     <lastmod>${latestIso}</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>

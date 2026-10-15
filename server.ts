@@ -1,3 +1,4 @@
+import {PRIMARY_SITE_URL} from './src/lib/site';
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -24,6 +25,14 @@ const __dirnameSafe = typeof __dirname !== "undefined" ? __dirname : path.dirnam
 let vite: any = null;
 const app = express();
 app.use(express.json());
+// Enable only after the new domain is attached to Vercel and HTTPS is live.
+app.use((req, res, next) => {
+  const host = String(req.headers['x-forwarded-host'] || req.get('host') || '').split(',')[0].trim().toLowerCase().split(':')[0];
+  if (host === 'www.dramahub.co.kr' || (process.env.DRAMA_REDIRECT_LEGACY === '1' && host === 'drama1-brown.vercel.app')) {
+    return res.redirect(308, PRIMARY_SITE_URL + req.originalUrl);
+  }
+  next();
+});
 
   // Helper function to calculate relative time (e.g. 5시간 전) from RFC 822 pubDate
   function getRelativeTime(pubDateStr: string): string {
@@ -300,16 +309,8 @@ app.use(express.json());
     }
   });
 
-  function getSiteUrl(req: express.Request): string {
-    if (process.env.VERCEL_URL) {
-      return `https://${process.env.VERCEL_URL}`;
-    }
-    const forwardedProto = (req.headers['x-forwarded-proto'] as string) || 'https';
-    const forwardedHost = (req.headers['x-forwarded-host'] as string) || req.get('host') || '';
-    if (!forwardedHost || forwardedHost.includes('localhost') || forwardedHost.includes('127.0.0.1')) {
-      return 'https://ais-dev-dcrcuobfizspf2mhbgcnva-436251446387.asia-northeast1.run.app';
-    }
-    return `${forwardedProto}://${forwardedHost}`;
+  function getSiteUrl(_req: express.Request): string {
+    return PRIMARY_SITE_URL;
   }
 
   function getDistHtmlTemplate(): string {
@@ -461,7 +462,7 @@ app.use(express.json());
         <article style="margin-bottom: 32px; border-bottom: 1px solid #f1f5f9; padding-bottom: 24px;">
           <span style="font-size: 11px; color: #2563eb; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">${escapeHtml(art.categoryNameKo || art.category)} · ${escapeHtml(art.subCategory || '')}</span>
           <h2 style="font-size: 22px; font-weight: 700; margin: 6px 0 8px 0; line-height: 1.3;">
-            <a href="/blog/${art.id}" style="color: #0f172a; text-decoration: none; border-bottom: 1px solid transparent;" onmouseover="this.style.borderBottom='1px solid #0f172a'" onmouseout="this.style.borderBottom='1px solid transparent'">${escapeHtml(art.title)}</a>
+            <a href="/blog/${encodeURIComponent(art.id)}" style="color: #0f172a; text-decoration: none; border-bottom: 1px solid transparent;" onmouseover="this.style.borderBottom='1px solid #0f172a'" onmouseout="this.style.borderBottom='1px solid transparent'">${escapeHtml(art.title)}</a>
           </h2>
           <p style="font-size: 15px; color: #475569; margin: 0 0 12px 0; line-height: 1.5;">${escapeHtml(art.excerpt || '')}</p>
           <div style="font-size: 12px; color: #64748b;">작성자: <strong>${escapeHtml(authorName)}</strong> (${escapeHtml(authorRole)}) · 작성일: ${escapeHtml(art.publishedAt)} · 읽는 시간: ${art.readTimeMinutes}분</div>
@@ -497,7 +498,8 @@ app.use(express.json());
       }
 
       // Existing post -> Real HTTP 200 with exact canonical, title, description, and BlogPosting/BreadcrumbList JSON-LD
-      const postUrl = `${siteUrl}/blog/${article.id}`;
+      const postUrl = `${siteUrl}/blog/${encodeURIComponent(article.id)}`;
+      if (req.params.id !== article.id || req.path.endsWith('/')) return res.redirect(308, '/blog/' + encodeURIComponent(article.id));
       const pubDateIso = new Date(article.publishedAt).toISOString();
       const modDateIso = getArticleLastMod(article);
       const description = article.excerpt || article.subtitle || article.title;
@@ -562,12 +564,12 @@ app.use(express.json());
     
     <!-- Schema.org BlogPosting JSON-LD -->
     <script type="application/ld+json">
-${JSON.stringify(blogPostingLd, null, 2)}
+${JSON.stringify(blogPostingLd, null, 2).replace(/</g, '\\u003c')}
     </script>
     
     <!-- Schema.org BreadcrumbList JSON-LD -->
     <script type="application/ld+json">
-${JSON.stringify(breadcrumbLd, null, 2)}
+${JSON.stringify(breadcrumbLd, null, 2).replace(/</g, '\\u003c')}
     </script>
 `;
       template = template.replace('</head>', `${articleMetaTags}\n</head>`);
@@ -589,6 +591,8 @@ ${JSON.stringify(breadcrumbLd, null, 2)}
       template = getDistHtmlTemplate();
     }
 
+    template = template.replace(/<meta property="og:type"[^>]*>/i, '<meta property="og:type" content="website" />');
+    template = template.replace('</head>', `<meta property="og:url" content="${siteUrl}/" />\n</head>`);
     const homeCanonical = `<link rel="canonical" href="${siteUrl}/" />`;
     if (template.includes('<link rel="canonical"')) {
       template = template.replace(/<link rel="canonical"[^>]*>/i, homeCanonical);
@@ -603,6 +607,7 @@ ${JSON.stringify(breadcrumbLd, null, 2)}
       template = template.replace('<div id="root"></div>', `<div id="root">${listSsrBody}</div>`);
     } catch (e) {
       console.error('[SEO Homepage List Render Failed]', e);
+      throw e;
     }
 
     res.status(200).set('Content-Type', 'text/html; charset=utf-8');
@@ -620,7 +625,7 @@ ${JSON.stringify(breadcrumbLd, null, 2)}
   app.get('/sitemap.xml', async (req, res) => {
     try {
       const siteUrl = normalizeSiteUrl(getSiteUrl(req));
-      const articles = await getPublishedArticles(false, false);
+      const articles = await getPublishedArticles();
       const xml = generateSitemapXml(siteUrl, articles);
       res.type('application/xml; charset=utf-8');
       res.status(200).send(xml);
@@ -640,7 +645,9 @@ ${JSON.stringify(breadcrumbLd, null, 2)}
   });
 
   // 4. Homepage and /blog list
-  app.get(['/', '/blog'], async (req, res, next) => {
+  app.get('/blog', (_req, res) => res.redirect(308, '/'));
+
+  app.get('/', async (req, res, next) => {
     try {
       await renderPage(req, res);
     } catch (err) {
@@ -662,8 +669,13 @@ ${JSON.stringify(breadcrumbLd, null, 2)}
       app.use(express.static(distPath, { index: false }));
     }
 
-    app.get('*', async (req, res) => {
-      await renderPage(req, res);
+    app.get('*', (req, res) => {
+      if (req.path.startsWith('/api/')) return res.status(404).json({error:'Not found'});
+      return res.status(404).type('html').send(render404PageHtml(DEFAULT_SITE_NAME));
+    });
+    app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      console.error('[Public page unavailable]', error);
+      res.status(503).set({'Content-Type':'text/html; charset=utf-8','X-Robots-Tag':'noindex','Retry-After':'60'}).send('<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="robots" content="noindex"><title>잠시 후 다시 확인해주세요</title><h1>콘텐츠를 불러오지 못했습니다.</h1><p>잠시 후 다시 시도해주세요.</p></html>');
     });
 
     if (!process.env.VERCEL) {

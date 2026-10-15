@@ -246,7 +246,7 @@ export const LiveTopicRankings: React.FC<LiveTopicRankingsProps> = ({ articles, 
         "position": item.rank,
         "name": `${item.rank}위: ${item.title}`,
         "url": item.originalArticle 
-          ? `https://ais-dev-dcrcuobfizspf2mhbgcnva-436251446387.asia-northeast1.run.app/articles/${item.originalArticle.id}`
+          ? `https://dramahub.co.kr/blog/${item.originalArticle.id}`
           : `https://news.google.com/search?q=${encodeURIComponent(item.title)}`
       }))
     };

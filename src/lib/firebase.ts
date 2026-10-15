@@ -1,3 +1,4 @@
+import {articleUrl} from './site';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { initializeFirestore, collection, getDocs, Firestore } from 'firebase/firestore';
 import { FirebaseArticleDoc, EditorialBlock } from '../types';
@@ -206,10 +207,12 @@ export async function fetchArticlesFromHub(): Promise<FirebaseArticleDoc[]> {
           avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&q=80',
           bio: '콘텐츠 허브에서 실시간 수집 및 교정이 완료된 프리미엄 에디토리얼 글입니다.'
         },
-        publishedAt: convertFirestoreTimestamp(data.createdAt),
+        publishedAt: convertFirestoreTimestamp(data.publishAt || data.publishedAt || data.createdAt),
         updatedAt: data.updatedAt ? convertFirestoreTimestamp(data.updatedAt) : undefined,
         // Preserve access control fields for indexable filtering
         status: data.status || 'published',
+        visibility: data.visibility,
+        isPublic: data.isPublic,
         isPublished: data.isPublished !== undefined ? data.isPublished : true,
         deleted: data.deleted !== undefined ? data.deleted : false,
         isDeleted: data.isDeleted !== undefined ? data.isDeleted : false,
@@ -223,12 +226,12 @@ export async function fetchArticlesFromHub(): Promise<FirebaseArticleDoc[]> {
           metaTitle: `${title} | 에디토리얼 웹진`,
           metaDescription: summary || (content.slice(0, 140) + '...'),
           keywords: Array.isArray(data.tags) ? data.tags : [],
-          canonicalUrl: typeof window !== 'undefined' ? window.location.origin : '',
+          canonicalUrl: articleUrl(doc.id),
           ogTitle: title,
           ogDescription: summary || (content.slice(0, 140) + '...'),
           ogImage: data.coverImage || 'https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=1600&q=80',
           naverSearchTitle: title,
-          robots: 'index, follow',
+          robots: data.seo?.robots || 'index, follow',
           structuredDataJsonLd: {
             "@context": "https://schema.org",
             "@type": "BlogPosting",

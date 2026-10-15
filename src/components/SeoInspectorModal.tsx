@@ -45,7 +45,7 @@ export const SeoInspectorModal: React.FC<SeoInspectorModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const domain = 'ais-dev-dcrcuobfizspf2mhbgcnva-436251446387.asia-northeast1.run.app';
+  const domain = 'dramahub.co.kr';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in font-pretendard">

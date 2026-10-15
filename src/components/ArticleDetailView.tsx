@@ -1,3 +1,4 @@
+import {PRIMARY_SITE_URL,articleUrl} from '../lib/site';
 /**
  * @file ArticleDetailView.tsx
  * Ultra-high-craft Editorial Webzine Detail Page Mockup
@@ -28,7 +29,7 @@ import {
 import { FirebaseArticleDoc, EditorialBlock, ThemeMode } from '../types';
 import { THEME_CONFIGS } from '../data/themes';
 import { EditorialAdSlot } from './EditorialAdSlot';
-import { buildBlogPostingJsonLd, buildBreadcrumbJsonLd, normalizeSiteUrl, DEFAULT_SITE_NAME } from '../lib/seoHelper';
+import { buildBlogPostingJsonLd, buildBreadcrumbJsonLd, DEFAULT_SITE_NAME } from '../lib/seoHelper';
 
 interface ArticleDetailViewProps {
   article: FirebaseArticleDoc;
@@ -68,7 +69,7 @@ export const ArticleDetailView: React.FC<ArticleDetailViewProps> = ({
 
   // Dynamic Google & Naver SEO Meta, Self-Referencing Canonical & JSON-LD Sync
   useEffect(() => {
-    const siteUrl = normalizeSiteUrl(window.location.origin);
+    const siteUrl = PRIMARY_SITE_URL;
     const postUrl = `${siteUrl}/blog/${article.id}`;
     const previousTitle = document.title;
 
@@ -160,7 +161,7 @@ export const ArticleDetailView: React.FC<ArticleDetailViewProps> = ({
   };
 
   const handleCopyLink = () => {
-    navigator.clipboard?.writeText(window.location.href);
+    navigator.clipboard?.writeText(articleUrl(article.id));
     setCopiedToast(true);
     setTimeout(() => setCopiedToast(false), 2200);
   };

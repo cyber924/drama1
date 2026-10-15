@@ -34,5 +34,18 @@
       "source": "/((?!assets/|favicon.ico|.*\\..*).*)",
       "destination": "/api/index"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.dramahub.co.kr"
+        }
+      ],
+      "destination": "https://dramahub.co.kr/:path*",
+      "permanent": true
+    }
   ]
 }

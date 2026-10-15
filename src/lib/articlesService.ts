@@ -48,7 +48,8 @@ export function isArticlePubliclyIndexable(article: any): boolean {
   if (article.deleted === true || article.isDeleted === true) return false;
 
   // Exclude draft or private
-  if (article.status === 'draft' || article.status === 'private') return false;
+  if (['draft','private','deleted','archived'].includes(article.status)) return false;
+  if (article.isPublic === false || ['private','draft'].includes(article.visibility)) return false;
   if (article.isPublished === false) return false;
 
   // Exclude noindex
@@ -56,8 +57,9 @@ export function isArticlePubliclyIndexable(article: any): boolean {
 
   // Exclude future scheduled posts
   const now = Date.now();
-  if (article.publishedAt) {
-    const pubTime = new Date(article.publishedAt).getTime();
+  const publishAt = article.publishAt || article.publishedAt;
+  if (publishAt) {
+    const pubTime = new Date(publishAt).getTime();
     // Allow up to 1 minute clock drift
     if (!isNaN(pubTime) && pubTime > now + 60000) {
       return false;
