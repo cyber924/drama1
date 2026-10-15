@@ -428,6 +428,56 @@ export const ArticleDetailView: React.FC<ArticleDetailViewProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Vertical Skyscraper Ad Banner (Torishop Official Sponsor 160x600 format) */}
+          <div className="bg-gradient-to-b from-amber-950 via-slate-900 to-amber-950 text-white rounded-xl p-5 border border-amber-500/40 shadow-xl relative overflow-hidden flex flex-col justify-between group">
+            {/* Decorative background golden glow */}
+            <div className="absolute -top-16 -right-16 w-32 h-32 bg-amber-500/20 rounded-full blur-2xl group-hover:bg-amber-500/30 transition-all"></div>
+            
+            <div className="space-y-4 relative z-10">
+              <div className="flex items-center justify-between text-[10px] font-bold tracking-widest text-amber-400 uppercase border-b border-amber-500/30 pb-2">
+                <span>OFFICIAL SPONSOR</span>
+                <span className="bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded text-[9px] font-mono">토리샵 (TORISHOP)</span>
+              </div>
+
+              <div className="space-y-2 text-center">
+                <span className="inline-block text-[11px] font-bold text-amber-300 bg-amber-400/20 px-2.5 py-0.5 rounded-full border border-amber-400/30">
+                  꽝 없는 100% 당첨!
+                </span>
+                <h3 className="text-base font-black text-amber-200 leading-snug tracking-tight">
+                  오늘의 행운을 긁어보세요!
+                </h3>
+                <p className="text-xs text-amber-100/90 font-medium leading-relaxed">
+                  드라마 다시보기는 토리샵에서!<br/>과연 당신의 복권에는 어떤 행운이 들어있을까요?
+                </p>
+              </div>
+
+              {/* Banner Visual matching Torishop uploaded theme */}
+              <div className="rounded-xl overflow-hidden relative h-[340px] bg-amber-950 border border-amber-500/40 shadow-inner group-hover:border-amber-400 transition-colors flex items-center justify-center">
+                <img 
+                  src="https://imagehub-2vhv.vercel.app/api/images/7iLRc6oD_1792045659147" 
+                  alt="토리샵 행운 복권 이벤트" 
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500 opacity-95"
+                />
+              </div>
+            </div>
+
+            <div className="pt-5 relative z-10">
+              <a 
+                href="https://filetori.com/?site=MKT1"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs rounded-xl transition-all shadow-lg flex items-center justify-center gap-1.5 cursor-pointer transform hover:-translate-y-0.5"
+              >
+                <span>토리샵 바로가기</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+              <div className="text-[9px] text-center text-amber-200/60 mt-2.5">
+                에디토리얼 웹진 공식 협찬사 · 토리샵
+              </div>
+            </div>
+          </div>
         </aside>
 
         {/* Right Main Article Content (Typography & Blocks) */}
