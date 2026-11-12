@@ -46,6 +46,17 @@
       ],
       "destination": "https://dramahub.co.kr/:path*",
       "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "drama1-brown.vercel.app"
+        }
+      ],
+      "destination": "https://dramahub.co.kr/:path*",
+      "permanent": true
     }
   ]
 }
